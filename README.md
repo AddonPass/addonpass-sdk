@@ -6,7 +6,7 @@ The SDK is currently a Base Sepolia `0.x` release. Install the reviewed public
 GitHub tag directly:
 
 ```sh
-pnpm add @addonpass/sdk@github:AddonPass/addonpass-sdk#v0.1.0
+pnpm add @addonpass/sdk@github:AddonPass/addonpass-sdk#v0.1.1
 ```
 
 The public SDK repository contains only middleware source. The AddonPass
@@ -56,6 +56,8 @@ const verifier = new AddonPassVerifier({
   apiBaseUrl: "https://api.addonpass.example",
   integrationCredential: "ADDON_SCOPED_CREDENTIAL",
 });
+
+The AddonPass integration test subscribes with a hidden test plan that reports no plan id, so it passes regardless of `allowedPlanIds`.
 
 const handle = createNodeStremioHandler({
   access: {

@@ -165,6 +165,16 @@ describe("AddonPassVerifier", () => {
     );
   });
 
+  it("allows a hidden test subscription that reports no plan", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(apiResponse(activeResponse({ planId: null }))),
+    );
+
+    await expect(verifier({ fetch }).verifyToken(TOKEN)).resolves.toMatchObject(
+      { entitled: true, planId: null },
+    );
+  });
+
   it("never bypasses a rejected integration credential", async () => {
     const verifyFallback = vi.fn(() => Promise.resolve(activeResponse()));
     const fallback: EntitlementFallback = {

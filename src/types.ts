@@ -33,17 +33,19 @@ export const entitlementResponseSchema = z
         message: "inconsistent entitlement state",
       });
     }
+    // planId is omitted from completeness: AddonPass reports no plan for a
+    // hidden integration-test subscription so plan allowlists never block it.
     const sourceValues = [
       value.finality,
       value.graceEnds,
       value.paidThrough,
-      value.planId,
       value.sourceBlock,
       value.sourceBlockHash,
       value.subscriptionId,
     ];
     const complete = sourceValues.every((item) => item !== null);
-    const empty = sourceValues.every((item) => item === null);
+    const empty =
+      value.planId === null && sourceValues.every((item) => item === null);
     if (
       (value.status === "not_found" && !empty) ||
       (value.status !== "not_found" && !complete)
