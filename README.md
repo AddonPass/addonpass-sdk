@@ -3,10 +3,10 @@
 `@addonpass/sdk` protects private Stremio JSON routes in the same process as the add-on handlers.
 
 The SDK is currently a Base Sepolia `0.x` release. Install the reviewed public
-GitHub tag directly:
+package directly:
 
 ```sh
-pnpm add @addonpass/sdk@github:AddonPass/addonpass-sdk#v0.1.1
+pnpm add @addonpass/sdk@0.1.1
 ```
 
 The public SDK repository contains only middleware source. The AddonPass
