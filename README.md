@@ -1,12 +1,12 @@
 # AddonPass middleware SDK
 
-`@addonpass/sdk` protects private Stremio JSON routes in the same process as the add-on handlers.
+`@addon-pass/sdk` protects private Stremio JSON routes in the same process as the add-on handlers.
 
 The SDK is currently a Base Sepolia `0.x` release. Install the reviewed public
 package directly:
 
 ```sh
-pnpm add @addonpass/sdk@0.1.1
+pnpm add @addon-pass/sdk@0.1.3
 ```
 
 The public SDK repository contains only middleware source. The AddonPass
@@ -36,8 +36,8 @@ The raw token is never sent to AddonPass. Do not log request URLs, attach third-
 
 - Framework-neutral Fetch handler: `createFetchStremioHandler`
 - Native Node HTTP handler: `createNodeStremioHandler`
-- Express 5 middleware: `@addonpass/sdk/express`
-- Fastify 5 pre-handler: `@addonpass/sdk/fastify`
+- Express 5 middleware: `@addon-pass/sdk/express`
+- Fastify 5 pre-handler: `@addon-pass/sdk/fastify`
 
 The framework packages are optional peers. Import only the adapter used by the add-on.
 
@@ -49,7 +49,7 @@ import { createServer } from "node:http";
 import {
   AddonPassVerifier,
   createNodeStremioHandler,
-} from "@addonpass/sdk";
+} from "@addon-pass/sdk";
 
 const verifier = new AddonPassVerifier({
   allowedPlanIds: ["PLAN_ID"],
@@ -93,7 +93,7 @@ import express from "express";
 import {
   createExpressStremioMiddleware,
   expressAddonPassAuthorization,
-} from "@addonpass/sdk/express";
+} from "@addon-pass/sdk/express";
 
 const app = express();
 app.use(createExpressStremioMiddleware({ access, verifier }));
@@ -106,7 +106,7 @@ app.get("/manifest.json", (_request, response) => {
 For Fastify, attach the same protection instance to every protected route and read the request-scoped result from it.
 
 ```ts
-import { createFastifyStremioProtection } from "@addonpass/sdk/fastify";
+import { createFastifyStremioProtection } from "@addon-pass/sdk/fastify";
 
 const protection = createFastifyStremioProtection({ access, verifier });
 app.get(

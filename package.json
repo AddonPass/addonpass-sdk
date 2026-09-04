@@ -1,5 +1,5 @@
 {
-  "name": "@addonpass/sdk",
+  "name": "@addon-pass/sdk",
   "version": "0.1.2",
   "description": "Fail-closed entitlement middleware for private Stremio add-ons using AddonPass.",
   "license": "MIT",
