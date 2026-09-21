@@ -1,17 +1,23 @@
 import type { PublicClient } from "viem";
-import { describe, expect, it, vi } from "vitest";
+import { assert, describe, expect, it, vi } from "vitest";
 
 import {
+  AddonPassVerifier,
+  createFetchStremioHandler,
   createViemEntitlementFallback,
   EntitlementScopeMismatchError,
   EntitlementVerificationError,
+  hashEntitlementToken,
 } from "../src/index.js";
 
 const CONTRACT = "0x1111111111111111111111111111111111111111";
 const DEVELOPER = "0x2222222222222222222222222222222222222222";
 const OTHER_DEVELOPER = "0x3333333333333333333333333333333333333333";
-const TOKEN_HASH = `0x${"44".repeat(32)}` as const;
+const TOKEN = Buffer.alloc(32, 7).toString("base64url");
+const TOKEN_HASH = hashEntitlementToken(TOKEN);
 const BLOCK_HASH = `0x${"55".repeat(32)}` as const;
+const PAID_THROUGH_MS = 1_788_220_810_000;
+const GRACE_ENDS_MS = 1_788_480_010_000;
 
 function client(input: {
   readonly blockTimestamp?: bigint;
@@ -61,16 +67,103 @@ function client(input: {
   };
 }
 
-function fallback(value: ReturnType<typeof client>["client"]) {
+function fallback(
+  value: ReturnType<typeof client>["client"],
+  now: () => Date = () => new Date(1_788_220_800_000),
+) {
   return createViemEntitlementFallback({
     chainId: 84_532,
     client: value,
     contractAddress: CONTRACT,
     expectedDeveloperAddress: DEVELOPER,
+    now,
   });
 }
 
 describe("safe-block contract fallback", () => {
+  it.each([
+    { cancelled: true, remainingCharges: 3 },
+    { cancelled: false, remainingCharges: 0 },
+  ])(
+    "rejects stale paid access and keeps the add-on closed: %j",
+    async (state) => {
+      let nowMs = PAID_THROUGH_MS;
+      const safeFallback = fallback(
+        client({ ...state, blockTimestamp: 1_788_220_809n }).client,
+        () => new Date(nowMs),
+      );
+      await expect(safeFallback.verify(TOKEN_HASH)).resolves.toMatchObject({
+        entitled: true,
+        status: "active",
+      });
+
+      nowMs += 1;
+      await expect(safeFallback.verify(TOKEN_HASH)).rejects.toBeInstanceOf(
+        EntitlementVerificationError,
+      );
+
+      const upstream = vi.fn(() => Response.json({ streams: [] }));
+      const handler = createFetchStremioHandler({
+        access: {
+          addonId: "com.example.private-addon",
+          addonName: "Private Add-on",
+          managementUrl: "https://addonpass.test/subscriptions",
+        },
+        upstream,
+        verifier: new AddonPassVerifier({
+          allowedPlanIds: [7n],
+          apiBaseUrl: "https://api.addonpass.test",
+          fallback: safeFallback,
+          fetch: vi.fn<typeof globalThis.fetch>(() =>
+            Promise.resolve(new Response(null, { status: 503 })),
+          ),
+          integrationCredential: `ap_v1_abcdefghij.${Buffer.alloc(32, 8).toString("base64url")}`,
+          now: () => new Date(nowMs),
+        }),
+      });
+      const response = await handler(
+        new Request(
+          `https://addon.test/addonpass/${TOKEN}/stream/movie/tt1254207.json`,
+        ),
+      );
+
+      expect(response.status).toBe(503);
+      expect(upstream).not.toHaveBeenCalled();
+    },
+  );
+
+  it("allows reported grace through its exact deadline and rejects an older positive snapshot afterward", async () => {
+    let nowMs = GRACE_ENDS_MS;
+    const safeFallback = fallback(
+      client({ blockTimestamp: 1_788_480_009n }).client,
+      () => new Date(nowMs),
+    );
+    await expect(safeFallback.verify(TOKEN_HASH)).resolves.toMatchObject({
+      entitled: true,
+      status: "grace",
+    });
+
+    nowMs += 1;
+    await expect(safeFallback.verify(TOKEN_HASH)).rejects.toBeInstanceOf(
+      EntitlementVerificationError,
+    );
+  });
+
+  it("checks the application clock after a delayed contract read", async () => {
+    let nowMs = PAID_THROUGH_MS - 1;
+    const fake = client({});
+    const originalRead = fake.readContract.getMockImplementation();
+    assert(originalRead !== undefined);
+    fake.readContract.mockImplementation((request) => {
+      if (request.functionName === "subscriptions") nowMs += 2;
+      return originalRead(request);
+    });
+
+    await expect(
+      fallback(fake.client, () => new Date(nowMs)).verify(TOKEN_HASH),
+    ).rejects.toBeInstanceOf(EntitlementVerificationError);
+  });
+
   it("reads and cross-checks the entitlement at one safe block", async () => {
     const fake = client({});
 

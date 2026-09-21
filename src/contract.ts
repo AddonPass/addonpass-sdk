@@ -7,6 +7,7 @@ import {
   type PublicClient,
 } from "viem";
 
+import { assertAccessCurrent } from "./access.js";
 import {
   AddonPassConfigurationError,
   EntitlementScopeMismatchError,
@@ -49,6 +50,7 @@ export function createViemEntitlementFallback(input: {
   >;
   readonly contractAddress: Address;
   readonly expectedDeveloperAddress: Address;
+  readonly now?: () => Date;
 }): EntitlementFallback {
   if (!Number.isSafeInteger(input.chainId) || input.chainId <= 0) {
     throw new AddonPassConfigurationError();
@@ -64,6 +66,7 @@ export function createViemEntitlementFallback(input: {
   if (isAddressEqual(expectedDeveloperAddress, zeroAddress)) {
     throw new AddonPassConfigurationError();
   }
+  const now = input.now ?? (() => new Date());
 
   return {
     async verify(tokenHash): Promise<EntitlementResponse> {
@@ -120,7 +123,7 @@ export function createViemEntitlementFallback(input: {
               : remainingCharges === 0
                 ? "authorization_ended"
                 : "expired";
-        return {
+        const response: EntitlementResponse = {
           entitled,
           finality: "safe",
           graceEnds: isoFromSeconds(graceEnds),
@@ -131,6 +134,8 @@ export function createViemEntitlementFallback(input: {
           status,
           subscriptionId: subscriptionId.toString(10),
         };
+        assertAccessCurrent(response, now().getTime());
+        return response;
       } catch (error: unknown) {
         if (
           error instanceof EntitlementScopeMismatchError ||
