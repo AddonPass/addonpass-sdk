@@ -64,6 +64,7 @@ function apiResponse(
 }
 
 function verifier(input: {
+  readonly cacheTtlMs?: number;
   readonly fallback?: EntitlementFallback;
   readonly fetch: typeof globalThis.fetch;
   readonly now?: () => Date;
@@ -74,6 +75,7 @@ function verifier(input: {
     fetch: input.fetch,
     integrationCredential: CREDENTIAL,
     now: input.now ?? (() => new Date(NOW_MS)),
+    ...(input.cacheTtlMs === undefined ? {} : { cacheTtlMs: input.cacheTtlMs }),
     ...(input.fallback === undefined ? {} : { fallback: input.fallback }),
   });
 }
@@ -122,8 +124,134 @@ describe("AddonPassVerifier", () => {
     nowMs += 1_000;
     await client.verifyToken(TOKEN);
     nowMs += 1_001;
-    await client.verifyToken(TOKEN);
+    await expect(client.verifyToken(TOKEN)).rejects.toBeInstanceOf(
+      EntitlementVerificationError,
+    );
 
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(["active", "grace"] as const)(
+    "rejects expired %s responses from the API and a custom fallback even without caching",
+    async (status) => {
+      const response = activeResponse({ status });
+      const deadline = Date.parse(
+        (status === "grace" ? response.graceEnds : response.paidThrough) ?? "",
+      );
+      for (const source of ["api", "contract"] as const) {
+        const client = verifier({
+          cacheTtlMs: 0,
+          fallback: { verify: () => Promise.resolve(response) },
+          fetch: vi.fn<typeof globalThis.fetch>(() =>
+            Promise.resolve(
+              apiResponse(response, source === "api" ? 200 : 503, "no-store"),
+            ),
+          ),
+          now: () => new Date(deadline + 1),
+        });
+
+        await expect(client.verifyToken(TOKEN)).rejects.toBeInstanceOf(
+          EntitlementVerificationError,
+        );
+      }
+    },
+  );
+
+  it.each(["active", "grace"] as const)(
+    "allows reported %s access through its exact deadline",
+    async (status) => {
+      const response = activeResponse({ status });
+      let nowMs =
+        Date.parse(
+          (status === "grace" ? response.graceEnds : response.paidThrough) ??
+            "",
+        ) - 1;
+      const client = verifier({
+        fetch: vi.fn<typeof globalThis.fetch>(() =>
+          Promise.resolve(apiResponse(response)),
+        ),
+        now: () => new Date(nowMs),
+      });
+
+      await expect(client.verifyToken(TOKEN)).resolves.toMatchObject({
+        entitled: true,
+        status,
+      });
+      nowMs += 1;
+      await expect(client.verifyToken(TOKEN)).resolves.toMatchObject({
+        entitled: true,
+        status,
+      });
+    },
+  );
+
+  it.each(["active", "grace"] as const)(
+    "checks %s expiry when a delayed response reaches concurrent callers",
+    async (status) => {
+      const response = activeResponse({ status });
+      let nowMs =
+        Date.parse(
+          (status === "grace" ? response.graceEnds : response.paidThrough) ??
+            "",
+        ) - 1;
+      let resolveResponse: ((response: Response) => void) | undefined;
+      const fetch = vi.fn<typeof globalThis.fetch>(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolveResponse = resolve;
+          }),
+      );
+      const client = verifier({ fetch, now: () => new Date(nowMs) });
+      const first = client.verifyToken(TOKEN);
+      const second = client.verifyToken(TOKEN);
+
+      nowMs += 2;
+      resolveResponse?.(apiResponse(response));
+
+      await expect(first).rejects.toBeInstanceOf(EntitlementVerificationError);
+      await expect(second).rejects.toBeInstanceOf(EntitlementVerificationError);
+      expect(fetch).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("does not allow an invalid application clock to bypass expiry", async () => {
+    const client = verifier({
+      fetch: vi.fn<typeof globalThis.fetch>(() =>
+        Promise.resolve(apiResponse(activeResponse())),
+      ),
+      now: () => new Date(Number.NaN),
+    });
+
+    await expect(client.verifyToken(TOKEN)).rejects.toBeInstanceOf(
+      EntitlementVerificationError,
+    );
+  });
+
+  it("accepts a fresh renewal after refusing a stale positive response", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(apiResponse(activeResponse()))
+      .mockResolvedValueOnce(
+        apiResponse(
+          activeResponse({
+            paidThrough: "2026-10-01T00:00:10.000Z",
+            graceEnds: "2026-10-04T00:00:10.000Z",
+          }),
+        ),
+      );
+    const client = verifier({
+      fetch,
+      now: () => new Date("2026-09-01T00:00:10.001Z"),
+    });
+
+    await expect(client.verifyToken(TOKEN)).rejects.toBeInstanceOf(
+      EntitlementVerificationError,
+    );
+    await expect(client.verifyToken(TOKEN)).resolves.toMatchObject({
+      entitled: true,
+      paidThrough: "2026-10-01T00:00:10.000Z",
+      cached: false,
+    });
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 

@@ -127,12 +127,15 @@ Do not register an unprotected copy of either handler.
 | Unknown or malformed token | Return a generic `404` without disclosing entitlement state. |
 | API network error or `5xx` | Use the optional safe-block contract fallback when configured; otherwise return `503`. |
 | Rejected credential, scope mismatch, or invalid API response | Fail closed. These errors never activate contract fallback. |
+| Positive decision received after its access deadline | Return `503` without invoking the add-on; wait for a current decision. |
 
-Successful API decisions use a bounded in-memory LRU cache. Its TTL is at most five seconds and is shortened so it can never extend access beyond paid-through or grace.
+Successful API decisions use a bounded in-memory LRU cache. Its TTL is at most five seconds and is shortened so it can never extend access beyond paid-through or grace. Every returned positive decision is also checked against the server clock after verification finishes, including concurrent requests and disabled caching. Active access ends at `paidThrough`; reported grace ends at `graceEnds`. Exact equality remains allowed. An old active response is never converted into grace because cancellation, exhausted authorization, or disabled renewals may prevent it.
 
 ## Direct contract fallback
 
 `createViemEntitlementFallback` reads the configured non-upgradeable contract at one safe block and cross-checks the stored subscription, hash, developer, chain, and plan scope. It is opt-in. Configure a bounded RPC transport and never treat a credential rejection as an API outage.
+
+Direct fallback calls enforce the same access deadline against the server clock after their RPC reads. They can grant grace only when the safe snapshot reports it. Both the fallback and verifier accept an optional `now: () => Date` clock for deterministic tests; production defaults to the server's current time.
 
 Use the same verifier instance for every protected route and keep its integration
 credential in the add-on server environment.

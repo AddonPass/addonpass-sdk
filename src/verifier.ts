@@ -1,5 +1,6 @@
 import type { Hex } from "viem";
 
+import { accessDeadlineMs, assertAccessCurrent } from "./access.js";
 import {
   AddonPassConfigurationError,
   AddonPassUnavailableError,
@@ -107,14 +108,6 @@ async function readBoundedBody(response: Response): Promise<string> {
   return text + decoder.decode();
 }
 
-function accessDeadlineMs(response: EntitlementResponse): number | null {
-  const deadline =
-    response.status === "grace" ? response.graceEnds : response.paidThrough;
-  if (!response.entitled || deadline === null) return null;
-  const parsed = Date.parse(deadline);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
 export interface AddonPassVerifierOptions {
   readonly allowedPlanIds: readonly (bigint | string)[];
   readonly apiBaseUrl: string;
@@ -193,19 +186,23 @@ export class AddonPassVerifier {
     const cached = this.#cache.get(tokenHash);
     if (cached !== undefined) {
       if (cached.expiresAtMs > nowMs) {
+        assertAccessCurrent(cached.decision, this.#now().getTime());
         this.#cache.delete(tokenHash);
         this.#cache.set(tokenHash, cached);
         return { ...cached.decision, cached: true };
       }
       this.#cache.delete(tokenHash);
     }
-    const active = this.#inFlight.get(tokenHash);
-    if (active !== undefined) return active;
-    const verification = this.#verify(tokenHash).finally(() => {
-      this.#inFlight.delete(tokenHash);
-    });
-    this.#inFlight.set(tokenHash, verification);
-    return verification;
+    let verification = this.#inFlight.get(tokenHash);
+    if (verification === undefined) {
+      verification = this.#verify(tokenHash).finally(() => {
+        this.#inFlight.delete(tokenHash);
+      });
+      this.#inFlight.set(tokenHash, verification);
+    }
+    const decision = await verification;
+    assertAccessCurrent(decision, this.#now().getTime());
+    return decision;
   }
 
   async #verify(tokenHash: Hex): Promise<EntitlementDecision> {
