@@ -19,15 +19,15 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "default": "./dist/index.js"
     },
     "./express": {
       "types": "./dist/express.d.ts",
-      "import": "./dist/express.js"
+      "default": "./dist/express.js"
     },
     "./fastify": {
       "types": "./dist/fastify.d.ts",
-      "import": "./dist/fastify.js"
+      "default": "./dist/fastify.js"
     }
   },
   "files": [
