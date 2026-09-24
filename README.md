@@ -6,7 +6,7 @@ The SDK is currently a Base Sepolia `0.x` release. Install the reviewed public
 package directly:
 
 ```sh
-pnpm add @addon-pass/sdk@0.1.4
+pnpm add @addon-pass/sdk@0.1.5
 ```
 
 The public SDK repository contains only middleware source. The AddonPass
