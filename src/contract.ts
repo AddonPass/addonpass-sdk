@@ -73,7 +73,7 @@ export function createViemEntitlementFallback(input: {
       try {
         const [actualChainId, block] = await Promise.all([
           input.client.getChainId(),
-          input.client.getBlock({ blockTag: "safe" }),
+          input.client.getBlock({ blockTag: "latest" }),
         ]);
         if (actualChainId !== input.chainId) {
           throw new EntitlementVerificationError();
@@ -125,7 +125,7 @@ export function createViemEntitlementFallback(input: {
                 : "expired";
         const response: EntitlementResponse = {
           entitled,
-          finality: "safe",
+          finality: "provisional",
           graceEnds: isoFromSeconds(graceEnds),
           paidThrough: isoFromSeconds(paidThrough),
           planId: planId.toString(10),

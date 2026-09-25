@@ -133,9 +133,9 @@ Successful API decisions use a bounded in-memory LRU cache. Its TTL is at most f
 
 ## Direct contract fallback
 
-`createViemEntitlementFallback` reads the configured non-upgradeable contract at one safe block and cross-checks the stored subscription, hash, developer, chain, and plan scope. It is opt-in. Configure a bounded RPC transport and never treat a credential rejection as an API outage.
+`createViemEntitlementFallback` reads the configured non-upgradeable contract at the latest block and cross-checks the stored subscription, hash, developer, chain, and plan scope. It is opt-in. Configure a bounded RPC transport and never treat a credential rejection as an API outage.
 
-Direct fallback calls enforce the same access deadline against the server clock after their RPC reads. They can grant grace only when the safe snapshot reports it. Both the fallback and verifier accept an optional `now: () => Date` clock for deterministic tests; production defaults to the server's current time.
+Direct fallback calls enforce the same access deadline against the server clock after their RPC reads. They can grant grace only when the block snapshot reports it. Both the fallback and verifier accept an optional `now: () => Date` clock for deterministic tests; production defaults to the server's current time.
 
 Use the same verifier instance for every protected route and keep its integration
 credential in the add-on server environment.

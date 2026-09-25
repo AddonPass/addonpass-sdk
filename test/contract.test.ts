@@ -164,14 +164,14 @@ describe("safe-block contract fallback", () => {
     ).rejects.toBeInstanceOf(EntitlementVerificationError);
   });
 
-  it("reads and cross-checks the entitlement at one safe block", async () => {
+  it("reads and cross-checks the entitlement at the latest block", async () => {
     const fake = client({});
 
     await expect(
       fallback(fake.client).verify(TOKEN_HASH),
     ).resolves.toMatchObject({
       entitled: true,
-      finality: "safe",
+      finality: "provisional",
       planId: "7",
       sourceBlock: "123",
       sourceBlockHash: BLOCK_HASH,
