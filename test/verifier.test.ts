@@ -67,13 +67,14 @@ function verifier(input: {
   readonly cacheTtlMs?: number;
   readonly fallback?: EntitlementFallback;
   readonly fetch: typeof globalThis.fetch;
+  readonly integrationCredential?: string;
   readonly now?: () => Date;
 }): AddonPassVerifier {
   return new AddonPassVerifier({
     allowedPlanIds: [7n],
     apiBaseUrl: "https://api.addonpass.test",
     fetch: input.fetch,
-    integrationCredential: CREDENTIAL,
+    integrationCredential: input.integrationCredential ?? CREDENTIAL,
     now: input.now ?? (() => new Date(NOW_MS)),
     ...(input.cacheTtlMs === undefined ? {} : { cacheTtlMs: input.cacheTtlMs }),
     ...(input.fallback === undefined ? {} : { fallback: input.fallback }),
@@ -111,6 +112,24 @@ describe("AddonPassVerifier", () => {
       JSON.stringify({ tokenHash: hashEntitlementToken(TOKEN) }),
     );
     expect(request?.body).not.toContain(TOKEN);
+  });
+
+  it("accepts network credentials and reports their network", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(
+        apiResponse(activeResponse({ chainId: 8_453, livemode: true })),
+      ),
+    );
+    const client = verifier({
+      fetch,
+      integrationCredential: CREDENTIAL.replace("ap_v1_", "ap_live_"),
+    });
+
+    await expect(client.verifyToken(TOKEN)).resolves.toMatchObject({
+      chainId: 8_453,
+      entitled: true,
+      livemode: true,
+    });
   });
 
   it("never caches access beyond paid-through", async () => {
