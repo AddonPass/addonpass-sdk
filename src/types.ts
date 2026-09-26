@@ -22,6 +22,8 @@ export const entitlementResponseSchema = z
       "not_found",
     ]),
     subscriptionId: positiveDecimalSchema.nullable(),
+    chainId: z.union([z.literal(8_453), z.literal(84_532)]).optional(),
+    livemode: z.boolean().optional(),
   })
   .strict()
   .superRefine((value, context) => {

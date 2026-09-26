@@ -84,6 +84,8 @@ createServer((request, response) => {
 
 Use placeholders in source control. Load the API URL, plan IDs, management URL, and integration credential from the add-on process environment.
 
+Integration credentials name their network: `ap_live_…` for Base and `ap_test_…` for Base Sepolia (older `ap_v1_…` credentials are Base Sepolia). Keep test and live credentials in separate environments; verification responses for network credentials include `chainId` and `livemode`. SDK releases before 0.1.7 accept only `ap_v1_` credentials.
+
 ## Express and Fastify
 
 Mount the Express middleware globally before every add-on handler. The middleware rejects `/manifest.json` without a token and rewrites an entitled request before Express performs downstream routing.
