@@ -32,6 +32,14 @@ export interface StremioAccessConfiguration {
 
 export interface StremioAccessResponder {
   denied(authorization: AuthorizedStremioRequest): Response;
+  /**
+   * Puts a "payment due" row above an entitled stream list during grace.
+   * Returns the body unchanged in every other case.
+   */
+  withGraceNotice(
+    authorization: AuthorizedStremioRequest,
+    body: unknown,
+  ): unknown;
   invalid(): Response;
   methodNotAllowed(): Response;
   options(): Response;
@@ -214,14 +222,41 @@ function responseBody(
   };
 }
 
+const accessDateFormat = new Intl.DateTimeFormat("en", {
+  day: "numeric",
+  month: "short",
+  timeZone: "UTC",
+  year: "numeric",
+});
+
+function accessDate(value: string | null): string | undefined {
+  if (value === null) return undefined;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? undefined
+    : accessDateFormat.format(date);
+}
+
 function denialMessage(decision: EntitlementDecision): string {
   switch (decision.status) {
-    case "authorization_ended":
-      return "This subscription has used its authorized charges. Resume it to continue.";
-    case "cancelled":
-      return "This subscription is cancelled and its paid access has ended.";
-    case "expired":
-      return "Payment access has expired. Manage the subscription to continue.";
+    case "authorization_ended": {
+      const ended = accessDate(decision.paidThrough);
+      return ended === undefined
+        ? "This subscription has used its authorized charges. Resume it to continue."
+        : `This subscription used all its authorized payments. Access ended on ${ended}. Resume it to continue.`;
+    }
+    case "cancelled": {
+      const ended = accessDate(decision.paidThrough);
+      return ended === undefined
+        ? "This subscription is cancelled and its paid access has ended."
+        : `This subscription was cancelled. Paid access ended on ${ended}.`;
+    }
+    case "expired": {
+      const ended = accessDate(decision.graceEnds ?? decision.paidThrough);
+      return ended === undefined
+        ? "Payment access has expired. Manage the subscription to continue."
+        : `Access ended on ${ended} because the renewal wasn't paid. Manage the subscription to continue.`;
+    }
     case "not_found":
       return "This installation link is invalid or no longer active.";
     case "active":
@@ -271,6 +306,28 @@ export function createStremioAccessResponder(
     },
     invalid() {
       return jsonResponse({ error: "access_denied" }, 404);
+    },
+    withGraceNotice(authorization, body) {
+      if (
+        authorization.decision.status !== "grace" ||
+        authorization.route.resource !== "stream" ||
+        typeof body !== "object" ||
+        body === null ||
+        !Array.isArray((body as { streams?: unknown }).streams)
+      ) {
+        return body;
+      }
+      const until = accessDate(authorization.decision.graceEnds);
+      const notice = {
+        description:
+          until === undefined
+            ? "The latest renewal didn't go through. Review the payment to keep watching."
+            : `The latest renewal didn't go through. Access continues until ${until}. Review the payment to keep watching.`,
+        externalUrl: normalized.managementUrl,
+        name: "Payment due",
+      };
+      const streams = (body as { streams: unknown[] }).streams;
+      return { ...body, streams: [notice, ...streams] };
     },
     methodNotAllowed() {
       const response = jsonResponse({ error: "method_not_allowed" }, 405);
