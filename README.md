@@ -57,8 +57,6 @@ const verifier = new AddonPassVerifier({
   integrationCredential: "ADDON_SCOPED_CREDENTIAL",
 });
 
-The AddonPass integration test subscribes with a hidden test plan that reports no plan id, so it passes regardless of `allowedPlanIds`.
-
 const handle = createNodeStremioHandler({
   access: {
     addonId: "com.example.private-addon",
@@ -83,6 +81,8 @@ createServer((request, response) => {
 ```
 
 Use placeholders in source control. Load the API URL, plan IDs, management URL, and integration credential from the add-on process environment.
+
+The AddonPass integration test subscribes with a hidden test plan that reports no plan id, so it passes regardless of `allowedPlanIds`. Before you create a paid plan, leave the list empty (for example `process.env.ADDONPASS_ALLOWED_PLAN_IDS.split(",")` on an empty value): only the integration test gets in. Add each plan id once it exists, then redeploy.
 
 Integration credentials name their network: `ap_live_…` for Base and `ap_test_…` for Base Sepolia (older `ap_v1_…` credentials are Base Sepolia). Keep test and live credentials in separate environments; verification responses for network credentials include `chainId` and `livemode`. SDK releases before 0.1.7 accept only `ap_v1_` credentials.
 

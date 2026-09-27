@@ -404,11 +404,39 @@ describe("AddonPassVerifier", () => {
     );
   });
 
+  it("admits only the integration test while no plans are allowed", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>();
+    const client = new AddonPassVerifier({
+      allowedPlanIds: "".split(","),
+      apiBaseUrl: "https://api.addonpass.test",
+      fetch,
+      integrationCredential: CREDENTIAL,
+      now: () => new Date(NOW_MS),
+    });
+    fetch.mockResolvedValueOnce(apiResponse(activeResponse({ planId: null })));
+    await expect(client.verifyToken(TOKEN)).resolves.toMatchObject({
+      entitled: true,
+    });
+    fetch.mockResolvedValueOnce(apiResponse(activeResponse()));
+    await expect(
+      client.verifyToken(Buffer.alloc(32, 6).toString("base64url")),
+    ).rejects.toBeInstanceOf(EntitlementScopeMismatchError);
+    expect(
+      () =>
+        new AddonPassVerifier({
+          allowedPlanIds: ["0"],
+          apiBaseUrl: "https://api.addonpass.test",
+          fetch,
+          integrationCredential: CREDENTIAL,
+        }),
+    ).toThrow(AddonPassConfigurationError);
+  });
+
   it("validates public configuration without echoing credential material", () => {
     expect(
       () =>
         new AddonPassVerifier({
-          allowedPlanIds: [],
+          allowedPlanIds: [7n],
           apiBaseUrl: "http://api.addonpass.test",
           fetch: vi.fn<typeof globalThis.fetch>(),
           integrationCredential: "invalid",

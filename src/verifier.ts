@@ -138,13 +138,12 @@ export class AddonPassVerifier {
     if (!CREDENTIAL_PATTERN.test(options.integrationCredential)) {
       throw new AddonPassConfigurationError();
     }
-    const allowedPlanIds = options.allowedPlanIds.map((value) =>
-      value.toString(),
-    );
-    if (
-      allowedPlanIds.length === 0 ||
-      allowedPlanIds.some((value) => !/^[1-9][0-9]*$/.test(value))
-    ) {
+    // An empty list admits only the AddonPass integration test until the
+    // add-on has paid plans. Blank entries come from splitting an empty value.
+    const allowedPlanIds = options.allowedPlanIds
+      .map((value) => value.toString().trim())
+      .filter((value) => value !== "");
+    if (allowedPlanIds.some((value) => !/^[1-9][0-9]*$/.test(value))) {
       throw new AddonPassConfigurationError();
     }
     this.#allowedPlanIds = new Set(allowedPlanIds);
