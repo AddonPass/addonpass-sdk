@@ -84,13 +84,74 @@ describe("Fetch Stremio adapter", () => {
       ),
     );
     const body = (await response.json()) as {
-      readonly streams: readonly { readonly externalUrl: string }[];
+      readonly streams: readonly {
+        readonly description: string;
+        readonly externalUrl: string;
+      }[];
     };
 
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(body.streams[0]?.externalUrl).toBe(ACCESS.managementUrl);
+    expect(body.streams[0]?.description).toBe(
+      "Access ended on Sep 4, 2026 because the renewal wasn't paid. Manage the subscription to continue.",
+    );
     expect(upstream).not.toHaveBeenCalled();
+  });
+
+  it("tells a subscriber in grace that payment is due, above the real streams", async () => {
+    const upstream = vi.fn(() =>
+      Response.json({
+        streams: [{ name: "1080p", url: "https://cdn.test/a" }],
+      }),
+    );
+    const handler = createFetchStremioHandler({
+      access: ACCESS,
+      upstream,
+      verifier: {
+        verifyToken: () => Promise.resolve(decision({ status: "grace" })),
+      },
+    });
+
+    const streams = await handler(
+      new Request(
+        `https://addon.test/addonpass/${TOKEN}/stream/movie/tt1254207.json`,
+      ),
+    );
+    expect(await streams.json()).toEqual({
+      streams: [
+        {
+          description:
+            "The latest renewal didn't go through. Access continues until Sep 4, 2026. Review the payment to keep watching.",
+          externalUrl: ACCESS.managementUrl,
+          name: "Payment due",
+        },
+        { name: "1080p", url: "https://cdn.test/a" },
+      ],
+    });
+
+    upstream.mockImplementation(() => Response.json({ metas: [] }));
+    const catalog = await handler(
+      new Request(
+        `https://addon.test/addonpass/${TOKEN}/catalog/movie/top.json`,
+      ),
+    );
+    expect(await catalog.json()).toEqual({ metas: [] });
+  });
+
+  it("leaves active stream lists untouched", async () => {
+    const handler = createFetchStremioHandler({
+      access: ACCESS,
+      upstream: () => Response.json({ streams: [] }),
+      verifier: { verifyToken: () => Promise.resolve(decision()) },
+    });
+
+    const response = await handler(
+      new Request(
+        `https://addon.test/addonpass/${TOKEN}/stream/movie/tt1254207.json`,
+      ),
+    );
+    expect(await response.json()).toEqual({ streams: [] });
   });
 
   it("keeps invalid bearer material generic", async () => {

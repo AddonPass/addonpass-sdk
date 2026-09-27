@@ -64,10 +64,32 @@ export function createFetchStremioHandler(
       }
       url.pathname = authorization.route.upstreamPath;
       const upstreamRequest = new Request(url, request);
-      return withCors(
-        await options.upstream(upstreamRequest, authorization),
-        request.method === "HEAD",
+      let upstreamResponse = await options.upstream(
+        upstreamRequest,
+        authorization,
       );
+      if (
+        authorization.decision.status === "grace" &&
+        authorization.route.resource === "stream" &&
+        upstreamResponse.ok &&
+        request.method === "GET" &&
+        (upstreamResponse.headers.get("content-type") ?? "").includes("json")
+      ) {
+        const body: unknown = await upstreamResponse
+          .clone()
+          .json()
+          .catch(() => undefined);
+        const noticed = responder.withGraceNotice(authorization, body);
+        if (noticed !== body) {
+          const headers = new Headers(upstreamResponse.headers);
+          headers.delete("content-length");
+          upstreamResponse = new Response(JSON.stringify(noticed), {
+            headers,
+            status: upstreamResponse.status,
+          });
+        }
+      }
+      return withCors(upstreamResponse, request.method === "HEAD");
     } catch (error: unknown) {
       if (
         error instanceof UnsupportedStremioRouteError ||

@@ -124,12 +124,15 @@ Do not register an unprotected copy of either handler.
 
 | State | Result |
 | --- | --- |
-| Active or grace | Invoke the add-on handler and return its Stremio JSON. |
-| Expired, cancelled, or authorization ended | Return valid Stremio JSON with the configured management URL; do not invoke the add-on. |
+| Active | Invoke the add-on handler and return its Stremio JSON. |
+| Grace | Invoke the add-on handler; stream lists start with a "Payment due" entry linking to the management URL. |
+| Expired, cancelled, or authorization ended | Return valid Stremio JSON with the date access ended and the configured management URL; do not invoke the add-on. |
 | Unknown or malformed token | Return a generic `404` without disclosing entitlement state. |
 | API network error or `5xx` | Use the optional safe-block contract fallback when configured; otherwise return `503`. |
 | Rejected credential, scope mismatch, or invalid API response | Fail closed. These errors never activate contract fallback. |
 | Positive decision received after its access deadline | Return `503` without invoking the add-on; wait for a current decision. |
+
+The fetch and Node handlers add the grace notice automatically. With the Express or Fastify adapters, pass stream responses through `createStremioAccessResponder(access).withGraceNotice(authorization, body)` to show it.
 
 Successful API decisions use a bounded in-memory LRU cache. Its TTL is at most five seconds and is shortened so it can never extend access beyond paid-through or grace. Every returned positive decision is also checked against the server clock after verification finishes, including concurrent requests and disabled caching. Active access ends at `paidThrough`; reported grace ends at `graceEnds`. Exact equality remains allowed. An old active response is never converted into grace because cancellation, exhausted authorization, or disabled renewals may prevent it.
 
