@@ -59,6 +59,40 @@ describe("Stremio route authorization", () => {
     });
   });
 
+  it("accepts player and library events, including a full watched batch", async () => {
+    const player =
+      "/player/series/tt123456%3A1%3A1/action=start&currentTime=0&duration=1320000.json";
+    const videoIds = Array.from(
+      { length: 100 },
+      (_, index) => `tt12345678:10:${String(index + 1)}`,
+    ).join(",");
+    const library = `/library/series/tt12345678/action=watched&videoId=${encodeURIComponent(videoIds)}.json`;
+
+    const results = await Promise.all(
+      [player, library].map((path) =>
+        authorizeStremioRequest(
+          { verifyToken: () => Promise.resolve(activeDecision()) },
+          new URL(`https://addon.test/addonpass/${TOKEN}${path}`),
+        ),
+      ),
+    );
+
+    expect(results.map((result) => result.route)).toEqual([
+      {
+        id: "tt123456%3A1%3A1",
+        resource: "player",
+        type: "series",
+        upstreamPath: player,
+      },
+      {
+        id: "tt12345678",
+        resource: "library",
+        type: "series",
+        upstreamPath: library,
+      },
+    ]);
+  });
+
   it.each([
     "/manifest.json",
     `/other/${TOKEN}/manifest.json`,

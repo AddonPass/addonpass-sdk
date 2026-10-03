@@ -81,6 +81,12 @@ export function createFastifyStremioProtection(
         authorizations.set(request, authorization);
         request.raw.url = `${authorization.route.upstreamPath}${url.search}`;
         void reply.header("access-control-allow-origin", "*");
+        if (
+          authorization.route.resource === "player" ||
+          authorization.route.resource === "library"
+        ) {
+          void reply.header("cache-control", "no-store");
+        }
       } catch (error: unknown) {
         if (
           error instanceof UnsupportedStremioRouteError ||

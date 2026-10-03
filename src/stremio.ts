@@ -7,10 +7,17 @@ import type { EntitlementDecision } from "./types.js";
 
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const ADDON_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{2,99}$/;
-const RESOURCE_NAMES = new Set(["catalog", "meta", "stream"]);
+const RESOURCE_NAMES = new Set([
+  "catalog",
+  "library",
+  "meta",
+  "player",
+  "stream",
+]);
 const MAX_PATH_LENGTH = 4_096;
 
-export type StremioResource = "catalog" | "manifest" | "meta" | "stream";
+export type StremioResource =
+  "catalog" | "library" | "manifest" | "meta" | "player" | "stream";
 
 export interface StremioRoute {
   readonly id: string | null;
@@ -68,8 +75,8 @@ function normalizeMountPath(value: string): string {
   return value;
 }
 
-function safeSegment(value: string): boolean {
-  if (value === "" || value.length > 1_024 || /%2f|%5c/i.test(value))
+function safeSegment(value: string, maxLength = 1_024): boolean {
+  if (value === "" || value.length > maxLength || /%2f|%5c/i.test(value))
     return false;
   try {
     const decoded = decodeURIComponent(value);
@@ -124,7 +131,8 @@ function parseRoute(
     id === undefined ||
     !safeSegment(type) ||
     !safeSegment(id) ||
-    (extra !== undefined && !safeSegment(extra))
+    // A library event lists up to 100 video ids in its extra arguments.
+    (extra !== undefined && !safeSegment(extra, MAX_PATH_LENGTH))
   ) {
     throw new UnsupportedStremioRouteError();
   }
@@ -210,6 +218,9 @@ function responseBody(
         type,
       },
     };
+  }
+  if (route.resource === "player" || route.resource === "library") {
+    return { success: false };
   }
   return {
     streams: [

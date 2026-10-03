@@ -64,6 +64,32 @@ describe("Fastify Stremio adapter", () => {
     await app.close();
   });
 
+  it("marks an event response as uncacheable", async () => {
+    const app = Fastify();
+    const protection = createFastifyStremioProtection({
+      access: {
+        addonId: "com.example.fastify",
+        addonName: "Fastify Add-on",
+        managementUrl: "https://addonpass.test/subscriptions/42",
+      },
+      verifier: { verifyToken: () => Promise.resolve(decision()) },
+    });
+    app.get(
+      "/addonpass/:token/library/:type/:id/:extra",
+      { preHandler: protection.preHandler },
+      () => ({ success: true }),
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/addonpass/${TOKEN}/library/movie/tt1254207/action=libraryAdd.json`,
+    });
+
+    expect(response.headers["cache-control"]).toBe("no-store");
+    expect(response.json()).toEqual({ success: true });
+    await app.close();
+  });
+
   it("returns renewal JSON without invoking a protected handler", async () => {
     const app = Fastify();
     const handler = vi.fn(() => ({ streams: [] }));

@@ -32,6 +32,8 @@ the middleware:
 
 The raw token is never sent to AddonPass. Do not log request URLs, attach third-party analytics to protected routes, or expose the same handlers on another path, port, or hostname.
 
+The protected resources are `manifest.json`, `catalog`, `meta`, `stream`, and the `player` and `library` events Stremio sends about a subscriber's playback and library activity. Any other path returns `404`.
+
 ## Supported adapters
 
 - Framework-neutral Fetch handler: `createFetchStremioHandler`
@@ -133,6 +135,8 @@ Do not register an unprotected copy of either handler.
 | Positive decision received after its access deadline | Return `503` without invoking the add-on; wait for a current decision. |
 
 The fetch and Node handlers add the grace notice automatically. With the Express or Fastify adapters, pass stream responses through `createStremioAccessResponder(access).withGraceNotice(authorization, body)` to show it.
+
+`player` and `library` events reach the add-on handler only for active or grace access; otherwise the SDK answers `{ "success": false }`. Event responses carry `cache-control: no-store`, so a repeated event is never answered from a cache: the fetch and Node handlers enforce it, and the Express and Fastify adapters set it before the handler runs.
 
 Successful API decisions use a bounded in-memory LRU cache. Its TTL is at most five seconds and is shortened so it can never extend access beyond paid-through or grace. Every returned positive decision is also checked against the server clock after verification finishes, including concurrent requests and disabled caching. Active access ends at `paidThrough`; reported grace ends at `graceEnds`. Exact equality remains allowed. An old active response is never converted into grace because cancellation, exhausted authorization, or disabled renewals may prevent it.
 

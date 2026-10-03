@@ -99,6 +99,49 @@ describe("Fetch Stremio adapter", () => {
     expect(upstream).not.toHaveBeenCalled();
   });
 
+  it("answers an event after expiry without invoking the add-on", async () => {
+    const upstream = vi.fn(() => Response.json({ success: true }));
+    const handler = createFetchStremioHandler({
+      access: ACCESS,
+      upstream,
+      verifier: {
+        verifyToken: () =>
+          Promise.resolve(decision({ entitled: false, status: "expired" })),
+      },
+    });
+
+    const response = await handler(
+      new Request(
+        `https://addon.test/addonpass/${TOKEN}/library/movie/tt1254207/action=watched.json`,
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ success: false });
+    expect(upstream).not.toHaveBeenCalled();
+  });
+
+  it("keeps an entitled event response out of caches", async () => {
+    const handler = createFetchStremioHandler({
+      access: ACCESS,
+      upstream: () =>
+        Response.json(
+          { success: true },
+          { headers: { "cache-control": "max-age=3600, public" } },
+        ),
+      verifier: { verifyToken: () => Promise.resolve(decision()) },
+    });
+
+    const response = await handler(
+      new Request(
+        `https://addon.test/addonpass/${TOKEN}/player/movie/tt1254207/action=start&currentTime=0&duration=5400000.json`,
+      ),
+    );
+
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    await expect(response.json()).resolves.toEqual({ success: true });
+  });
+
   it("tells a subscriber in grace that payment is due, above the real streams", async () => {
     const upstream = vi.fn(() =>
       Response.json({
