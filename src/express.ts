@@ -74,6 +74,12 @@ export function createExpressStremioMiddleware(
       request.originalUrl = safeUrl;
       response.locals[EXPRESS_ADDONPASS_LOCAL] = authorization;
       response.setHeader("access-control-allow-origin", "*");
+      if (
+        authorization.route.resource === "player" ||
+        authorization.route.resource === "library"
+      ) {
+        response.setHeader("cache-control", "no-store");
+      }
       next();
     } catch (error: unknown) {
       if (

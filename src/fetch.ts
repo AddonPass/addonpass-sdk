@@ -89,7 +89,15 @@ export function createFetchStremioHandler(
           });
         }
       }
-      return withCors(upstreamResponse, request.method === "HEAD");
+      const response = withCors(upstreamResponse, request.method === "HEAD");
+      // A cached answer would keep a repeated event from reaching the add-on.
+      if (
+        authorization.route.resource === "player" ||
+        authorization.route.resource === "library"
+      ) {
+        response.headers.set("cache-control", "no-store");
+      }
+      return response;
     } catch (error: unknown) {
       if (
         error instanceof UnsupportedStremioRouteError ||

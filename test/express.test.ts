@@ -66,6 +66,9 @@ async function listen(): Promise<string> {
       status: authorization.decision.status,
     });
   });
+  app.get("/player/:type/:id/:extra", (_request, response) => {
+    response.json({ success: true });
+  });
   const server = createServer(app);
   servers.push(server);
   await new Promise<void>((resolve, reject) => {
@@ -92,6 +95,17 @@ describe("Express Stremio adapter", () => {
       resource: "manifest",
       status: "active",
     });
+  });
+
+  it("marks an event response as uncacheable", async () => {
+    const origin = await listen();
+
+    const response = await fetch(
+      `${origin}/addonpass/${TOKEN}/player/movie/tt1254207/action=pause&currentTime=1000&duration=5400000.json`,
+    );
+
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    await expect(response.json()).resolves.toEqual({ success: true });
   });
 
   it("does not expose the downstream route without a token", async () => {
